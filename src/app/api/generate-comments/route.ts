@@ -14,10 +14,9 @@ export async function POST(req: NextRequest) {
 
     // Read the Excel file
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(arrayBuffer);
     
     const allPreviewData: Record<string, any[]> = {};
 
