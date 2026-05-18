@@ -16,6 +16,13 @@ export default function Home() {
   const [revisionPrompt, setRevisionPrompt] = useState("");
   const [activeSheet, setActiveSheet] = useState<string>("");
 
+  const [file2, setFile2] = useState<File | null>(null);
+  const [loading2, setLoading2] = useState(false);
+  const [downloading2, setDownloading2] = useState(false);
+  const [previewData2, setPreviewData2] = useState<Record<string, any[]> | null>(null);
+  const [revisionPrompt2, setRevisionPrompt2] = useState("");
+  const [activeSheet2, setActiveSheet2] = useState<string>("");
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
@@ -92,6 +99,85 @@ export default function Home() {
       alert("Lỗi tải file!");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleFileChange2 = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFile2(e.target.files[0]);
+    }
+  };
+
+  const handleProcess2 = async () => {
+    if (!file2) {
+      alert("Vui lòng chọn file trước!");
+      return;
+    }
+    setLoading2(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file2);
+      if (revisionPrompt2) {
+        formData.append("revisionPrompt", revisionPrompt2);
+      }
+
+      const response = await fetch("/api/generate-nlpc-comments", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPreviewData2(data.previewData);
+        if (data.previewData) {
+           const sheets = Object.keys(data.previewData);
+           if (sheets.length > 0) setActiveSheet2(sheets[0]);
+        }
+      } else {
+        const errorData = await response.json();
+        alert("Lỗi: " + errorData.error);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Có lỗi xảy ra khi gọi API!");
+    } finally {
+      setLoading2(false);
+    }
+  };
+
+  const handleDownload2 = async () => {
+    if (!file2 || !previewData2) return;
+    
+    setDownloading2(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file2);
+      formData.append("previewData", JSON.stringify(previewData2));
+
+      const response = await fetch("/api/download-nlpc-excel", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "KetQua_NLPC_" + file2.name;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+      } else {
+        const errorData = await response.json();
+        alert("Lỗi khi tải file: " + errorData.error);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Lỗi tải file!");
+    } finally {
+      setDownloading2(false);
     }
   };
 
@@ -204,8 +290,84 @@ export default function Home() {
             <Card>
               <CardHeader>
                 <CardTitle>Nhận xét Năng lực & Phẩm chất</CardTitle>
-                <CardDescription>Tính năng đang được phát triển.</CardDescription>
+                <CardDescription>
+                  Tải lên file đánh giá Năng lực và Phẩm chất để AI tự động sinh nhận xét.
+                </CardDescription>
               </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid w-full max-w-sm items-center gap-1.5">
+                  <Label htmlFor="file-upload-2">File Excel mẫu</Label>
+                  <Input id="file-upload-2" type="file" accept=".xlsx, .xls" onChange={handleFileChange2} />
+                </div>
+                <div className="flex gap-4">
+                  <Button onClick={handleProcess2} disabled={loading2 || !file2} variant={previewData2 ? "outline" : "default"}>
+                    {loading2 ? "Đang xử lý AI..." : (previewData2 ? "Chạy Lại AI" : "Sinh Nhận Xét Tự Động")}
+                  </Button>
+                  {previewData2 && (
+                     <Button onClick={handleDownload2} disabled={downloading2} className="bg-green-600 hover:bg-green-700 text-white">
+                       {downloading2 ? "Đang tạo Excel..." : "Tải Xuống File Excel"}
+                     </Button>
+                  )}
+                </div>
+
+                {previewData2 && (
+                  <div className="mt-8 space-y-6">
+                    <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                       <Label className="text-blue-800 font-semibold mb-2 block">AI chưa xưng hô đúng ý? Yêu cầu sửa lại toàn bộ:</Label>
+                       <div className="flex gap-2">
+                         <Textarea 
+                            placeholder="Ví dụ: Viết ngắn gọn hơn, không quá 1 câu. Hoặc: Thêm từ 'Rất đáng khen'..." 
+                            value={revisionPrompt2}
+                            onChange={(e) => setRevisionPrompt2(e.target.value)}
+                            className="bg-white"
+                         />
+                         <Button onClick={handleProcess2} disabled={loading2} className="whitespace-nowrap h-auto">
+                           Bảo AI sửa lại
+                         </Button>
+                       </div>
+                    </div>
+
+                    <div className="border rounded-md">
+                       <div className="flex bg-slate-100 overflow-x-auto p-1 border-b">
+                         {Object.keys(previewData2).map(sheet => (
+                            <button
+                               key={sheet}
+                               onClick={() => setActiveSheet2(sheet)}
+                               className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${activeSheet2 === sheet ? 'bg-white border border-b-0 text-blue-600' : 'text-slate-600 hover:bg-slate-200'}`}
+                            >
+                               {sheet}
+                            </button>
+                         ))}
+                       </div>
+                       
+                       <div className="p-0 overflow-x-auto max-h-[500px] overflow-y-auto">
+                          <table className="w-full text-sm text-left relative">
+                            <thead className="bg-slate-50 text-slate-700 sticky top-0 shadow-sm">
+                              <tr>
+                                <th className="px-4 py-3 border-b">STT</th>
+                                <th className="px-4 py-3 border-b">Họ Tên</th>
+                                <th className="px-4 py-3 border-b w-1/4">Nhận Xét NLC</th>
+                                <th className="px-4 py-3 border-b w-1/4">Nhận Xét NLĐT</th>
+                                <th className="px-4 py-3 border-b w-1/4">Nhận Xét Phẩm Chất</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {activeSheet2 && previewData2[activeSheet2]?.map((r: any, i: number) => (
+                                <tr key={i} className="border-b hover:bg-slate-50">
+                                  <td className="px-4 py-3 font-medium text-slate-500">{r.stt}</td>
+                                  <td className="px-4 py-3 font-medium">{r.studentName}</td>
+                                  <td className="px-4 py-3 text-green-700 italic">{r.nhanXetNLC}</td>
+                                  <td className="px-4 py-3 text-blue-700 italic">{r.nhanXetNLDT}</td>
+                                  <td className="px-4 py-3 text-purple-700 italic">{r.nhanXetPC}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                       </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
             </Card>
           </TabsContent>
 
